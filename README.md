@@ -80,6 +80,19 @@ Note that with the exception of the exponent which uses a different bias, the in
 
 Conversion to IEEE-754 single precision binary interchange format is easy though.  I give an example below.
 
+# Function Stack Effects
+* fadd32 ( F: r1 r2 -- r3 ) - Add r1 to r2 giving the sum r3
+* fsub32 ( F: r1 r2 -- r3 ) - Subtract r2 from r1, giving r3
+* fmult32 ( F: r1 r2 -- r3 ) - Multiply r1 by r2 giving r3
+* fdiv32 ( F: r1 r2 -- r3 ) - Divide r1 by r2, giving the quotient r3
+* fsquare32 ( F: r1 -- r2 ) - r2 is the square of r1
+* ftrunc32 ( F: r1 -- r2 ) - Rounds r1 to an integral value using the "round towards zero" rule, giving r2
+* uitrunc32 ( F: r -- ) - Return the integral part of r as an unsigned 32 bit integer in A=msw and Y=lsw
+* floor32 ( F: r1 -- r2 ) -  Round r1 to an integral value using the "round toward negative infinity"
+* fround32 ( F: r1 -- r2 ) - Round r1 to an integral value using the "round to nearest" rule, giving r2
+* pushu32 ( F: -- r1 ) - push r1 onto stack. r1 is the floating-point equivalent of the unsigned 32-bit integer, n, in the A and Y regsters (Y-lsw, A=msw) when called.
+* str2fp32 ( F: -- r ) - Convert the source string to float r and place it on the TOS.  Call with A = address of string in current data bank and Y is string length.
+
 # Example Code
 
 1. Sample function call:
