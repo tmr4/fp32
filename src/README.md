@@ -1,10 +1,12 @@
+fp32.s       - 32-bit fp package for 65816 for the ca65 assembler
+
 fpu.txt      - Marco Granati's original 128-bit fp code
 
 fp.s         - ca65 port of fpu.txt
 
 inc/macro.s  - macros used by fp.s
 
-# Use
+# 128-bit FP Package Use
 Marco’s package uses a good deal of the direct page.  Depending on how full your direct page is, you may need to create a separate one for his package.  I had to do this for my system.  I named the new segment DPFPU.  There is a trick to get the linker to recognize this new segment that obviously isn’t located at $0000 as a direct page.  You need to define the segment as:
  
     DPFPU:    load=DPFP, run=DP, type=rw;
