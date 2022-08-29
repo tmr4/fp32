@@ -4,7 +4,7 @@
 # Features
 * IEEE-754 single precision 
 * Stack based with X register used as a floating-point stack pointer (FPSP)
-* Floating-point values represented internally with 32-bit mantissa internally (24-bit significand bits, including the hidden bit plus 8 guard bits for rounding)
+* Floating-point values represented internally with a 32-bit mantissa (24-bit significand bits, including the hidden bit plus 8 guard bits for rounding)
 * Functions
 ````
     * fadd32, fsub32, fmult32, fdiv32       x+y, x-y, x*y, x/y
@@ -17,15 +17,15 @@
 ````
 
 # Development
-This package is modified from Marco Granati's 128-bit floating-point package for the [65816](http://65xx.unet.bz/fpu.txt).  The original source file and my port of it to the [ca65 assembler](https://github.com/cc65/cc65) are in the [scr folder](https://github.com/tmr4/fp32/tree/main/src).  A [discussion](http://forum.6502.org/viewtopic.php?f=2&t=4133) of the code is available online.
+This package is modified from Marco Granati's [128-bit floating-point package for the 65816](http://65xx.unet.bz/fpu.txt).  The original source file and my port of it to the [ca65 assembler](https://github.com/cc65/cc65) are in the [scr folder](https://github.com/tmr4/fp32/tree/main/src).  A [discussion](http://forum.6502.org/viewtopic.php?f=2&t=4133) of the original code is available online.
 
 # Why make a 32-bit version
 128-bit floating-point is great to have for the 65816 if you need the precision but if you don't the extra precision consumes a lot of cycles that serve no purpose.  Also, a fair number of cycles are needed to switch to the dedicated floating-point direct page and load arguments and retrieve results from the dedicated floating-point registers.  
 
-I wanted something faster, so I looked for ways to speed up the floating-point package. I noted a few possibilities when I added the Marco's package to my system:
+I wanted something faster, so I looked for ways to speed up the floating-point package. I noted a few possibilities when I added Marco's package to my system:
 * Use the system direct page or avoid it altogether. The 128-bit fp package uses a dedicated direct page which must be shifted to and back for each fp operation (or this could be combined with the system direct page if you have enough space).
 * Use a dedicated fp stack. The 128-bit fp package uses registers which must be loaded and the result retrieved from for each fp operation.
-* Use 16-bit registers unless needed otherwise. The 128-bit fp package requires every fp operation to be called with 8-bit registers. Since my system uses 16-bit registers, this required a switch before and after every fp operation.
+* Use 16-bit registers unless needed otherwise. The 128-bit fp package requires every fp operation to be called with 8-bit registers. Since my system uses 16-bit registers, this requires a switch before and after every fp operation.
 I've greatly reduced this overhead by using a floating-point stack.  I found the 32-bit package about 5.5 times faster than the 128-bit version running a Mandelbrot Set calculation.  Converting to 32-bit acounted for most of this, about 4x, but the other overhead accounted for about 1.5x of it.  I haven't done any optimization so perhaps this advantage could be increased.
 
 # Use
@@ -69,7 +69,7 @@ The package would be pretty useless without a way to get values on the floating-
 
 The pushu32 function is a version of Marco's fldu32 function.  Call it with an unsigned 32-bit integer in the A and Y registers (Y-lsw, A=msw).  As the name implies, it will push the 32-bit floating-point equivalent to the stack.
 
-The str2fp32 function is a streamlined version of Marco's str2fp function, but only handling decimal values.  The code still has some of Marco's error checking, but I'll likely remove that as it's not needed in Forth (if the value isn't a proper fp value the system will try to interpret it as something else). The string is parsed from left to right.  The expected format is a decimal ascii string, beginning with an optional '+' or '-' sign, followed by a decimal mantissa consisting of a sequence of decimal digits optionally containing a decimal-point character, '.'. The mantissa may be optionally followed by an  exponent.  An exponent consists of an 'E' or 'e' followed by an optional plus or minus sign, followed by a sequence of decimal digits.  The exponent indicates the power of 10 by which the mantissa should be scaled.  
+The str2fp32 function is a streamlined version of Marco's str2fp function, but only handles decimal values.  The code still has some of Marco's error checking, but I'll likely remove that as it's not needed in Forth (if the value isn't a proper fp value the system will try to interpret it as something else). The string is parsed from left to right.  The expected format is a decimal ascii string, beginning with an optional '+' or '-' sign, followed by a decimal mantissa consisting of a sequence of decimal digits optionally containing a decimal-point character, '.'. The mantissa may be optionally followed by an  exponent.  An exponent consists of an 'E' or 'e' followed by an optional plus or minus sign, followed by a sequence of decimal digits.  The exponent indicates the power of 10 by which the mantissa should be scaled.  
 
 Call str2fp32 with the address of a string in current data bank in the Accumulator and the length of the string in the Y register.  This is a change from Marco's code, which uses a null terminated string or invalid character to end conversion.  My interpreter provides the string length for free so this is easy for me.  You can revert the code if it isn't for you.
 
