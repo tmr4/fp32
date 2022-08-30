@@ -26,6 +26,7 @@ I wanted something faster, so I looked for ways to speed up the floating-point p
 * Use the system direct page or avoid it altogether. The 128-bit fp package uses a dedicated direct page which must be shifted to and back for each fp operation (or this could be combined with the system direct page if you have enough space).
 * Use a dedicated fp stack. The 128-bit fp package uses registers which must be loaded and the result retrieved from for each fp operation.
 * Use 16-bit registers unless needed otherwise. The 128-bit fp package requires every fp operation to be called with 8-bit registers. Since my system uses 16-bit registers, this requires a switch before and after every fp operation.
+
 I've greatly reduced this overhead by using a floating-point stack.  I found the 32-bit package about 5.5 times faster than the 128-bit version running a Mandelbrot Set calculation.  Converting to 32-bit acounted for most of this, about 4x, but the other overhead accounted for about 1.5x of it.  I haven't done any optimization so perhaps this advantage could be increased.
 
 # Use
