@@ -14,8 +14,6 @@
         rep #$20
 .endmacro
 
-SHORT = 0       ; use faster mult10 routine; set to 1 for slower but smaller code footprint
-
 .P816
 .a16
 .i16
@@ -691,9 +689,6 @@ movres32:
         ; normalize result
         ; *** TODO: review and determine how we want to treat overflow ***
         lda fexph               ; operation involved subnormal?
-
-.if SHORT       ; use slower, but shorter mult10 routine
-
         beq @fn                 ; no
         jsr shrmx32             ; ...because TOS is subnormal
 @tz:    jmp chkz32              ; underflow test; check if TOS=0
@@ -701,19 +696,6 @@ movres32:
         lda TOSe,x
         cmp #1
         beq @tz                 ; can't normalize: underflow test
-
-.else           ; use faster mult10 routine
-
-        beq fn                  ; no
-        jsr shrmx32             ; ...because TOS is subnormal
-tz:     jmp chkz32              ; underflow test; check if TOS=0
-fn:
-        lda TOSe,x
-        cmp #1
-        beq tz                  ; can't normalize: underflow test
-
-.endif          ; end SHORT
-
         ldy TOSm+2,x            ; check msb
         bmi @done               ; already normalized
 @sh:    cmp #1
@@ -956,7 +938,6 @@ divm:
 @lst:   lda #$40                 ; 2 last bits quotient for normalitation...
         bra @sub                 ; ...and rounding
 
-        ; *** TODO: review, don't know what's going on here and likely have more ASLs than needed ***
 @done:  plp                      ; end of division
         asl                      ; last truncated quotient (00..03)...
         asl                      ; ...shifted to bits 15&14 of TOSext...
@@ -1192,6 +1173,19 @@ pushu32:
         ora TOSm+2,x            ; ... and test for 0
         beq okz                 ; was n = 0?
         lda #BIAS32             ; biased exponent for 32 bit value        
+        bra setu                ; set biased exponent and normalize
+
+; pushu16 ( F: -- r1 )
+; push r1 onto stack. r1 is the floating-point equivalent of the
+; unsigned 16-bit integer, n, in the Y regster
+pushu16:
+        jsr decfpsp             ; make room for r1 on top of stack
+        jsr setTOS0             ; set TOS to 0
+        stz TOSsgn,x            ; also TOSst = 0 for normal TOS <> 0
+        sty TOSm+2,x            ; store n lmw ...
+        tya                     ; ... and test for 0
+        beq okz                 ; was n = 0?
+        lda #BIAS16             ; biased exponent for 32 bit value        
         bra setu                ; set biased exponent and normalize
 
 ; setTOSu16 - set TOS to the unsigned 16-bit integer, n, in A
@@ -1480,157 +1474,35 @@ str2fp32:
 @eupd1:
         rts                      ; CF=1 if exponent overflow
 
-; 32-bit IEEE-754 Values
-;         IEEE            Internal
-;                         sgn  exp  mantissa  guard
-; 0.1     3DCCCCCD        0    7B   CC CC CC  CC
-; 10      41200000        0    82   40
-;ieee01m: .word $CCCC, $CCCC
-ieee01m: .word $CCCC, $CCCD
-ieee01e: .word $007B
-ieee10m: .word $A000, $0
-ieee10e: .word $0082
-
 
 ; We can either use fmult32 with a constant 10 as the argument or we
 ; can make this a bit faster hardcoding the multiplication.  Multiplying
 ; by 10 in binary (%1010) is just three shifts and an add.  It requires
-; more code though.  I've opted for speed here though since this is 
-; just used for value I/O the improvement probably won't be very noticable
-; unless you're inputing/printing a lot of values.  A test of inputing and
-; outputing about 40 fp values of varying length showed about a two second
-; advantage to the hardcoded routine.
+; more code readable though and since this routine is just used for I/O
+; the improvement isn't very noticable unless you're inputing/printing a
+; lot of values.  A test of inputing and outputing about 40 fp values of
+; varying length showed about a two second advantage to the hardcoded routine.  
+; See https://trobertson.site/65816-coding-to-optimize-or-not/ for the alternate code.
 
-; *** To use the shorter code version, set SHORT to 1 at the top of this file ***
 ; mult10 (F: r1 -- r2 )
 ; r2 is equal to r1 * 10
 mult10:
-
-.if SHORT       ; use slower, but shorter mult10 routine
-
-        ; make room on top of fp stack for 10
-        jsr decfpsp                      ; make room for r1 on top of stack
-        jsr setTOS0                     ; initialize it *** TODO: see what original package does, without this we get entry errors ***
-        ; *** TODO: need to clear status for some things otherwise the zero check messes things up.  We're likely missing a status transfer that used to happen in fac ***
-        stz TOSsgn,x                    ; also TOSst = 0 for normal TOS <> 0
-
-        ; move 10 to top of fp stack
-        lda f:ieee10m
-        sta TOSm+2,x
-        lda f:ieee10m+2
-        sta TOSm,x
-        lda f:ieee10e
-        sta TOSe,x
-
-        jsr fmult32
+        ; push 10 on top of fp stack
+        ldy #10
+        jsr pushu16
+        jsr fmult32             ; r1 * 10
         rts
 
-.else           ; use faster mult10 routine
 
-        ; *** TODO: I'm missing something here as it works fine
-        ; with integers but truncates any fractional part ***
-        ldy #0
-        clc
-
-        ; multiply TOSm by 10 (%1010)
-        ; r1 * 10 = r1 * (8 + 2) = (r1 * 8) + (r1 * 2)
-        ; r1 * 2 => Y=lsw, A=msw, tmp2=overflow and TOSm,TOSm+2,TOSext for use later
-        lda TOSm,x
-        beq @eqz                ; TOS lsw = 0? yes, go check msw
-        asl
-        tay                     ; lsw
-        sta TOSm,x
-        lda TOSm+2,x
-@nez:
-        rol
-        sta TOSm+2,x
-        phx                     ; save FPSP
-        tax                     ; msw
-        lda #0                  ; capture any overflow
-        rol
-        sta tmp2
-        sta TOSext
-
-        ; r1 * 4 = tm * 2
-        tya                     ; lsw
-        asl
-        tay
-        txa                     ; msw
-        rol
-        tax
-        rol tmp2
-
-        ; r1 * 8 = tm * 2
-        tya                     ; lsw
-        asl
-        tay
-        txa                     ; msw
-        rol
-        tax
-        rol tmp2
-
-        tya                     ; lsw
-        txy                     ; save msw
-        plx                     ; retrieve FPSP
-
-        ; r1 * 10 = tm + TOSm
-        ; carry is clear
-        adc TOSm,x
-        sta tm
-        tya                     ; msw 
-        adc TOSm+2,x
-        sta tm+2
-        lda tmp2
-        adc TOSext
-
-        ; save product to to TOSm, shifting one byte to right
-        acc8
-        sta TOSm+3,x
-        lda tm+3
-        sta TOSm+2,x
-        lda tm
-        sta TOSext+1
-        acc16
-        lda tm+1
-        sta TOSm,x
-
-        ; we've shifted the product one byte to the right
-        ; increase the exponent to compensate
-        clc
-        lda TOSe,x
-        adc #8
-        sta TOSe,x
-        jsr fn                  ; normalize result
-        clc
-        rts
-
-@eqz:
-        lda TOSm+2,x
-        bne @nez
-        jmp setTOS0
-
-.endif
-
-
+; div10 (F: r1 -- r2 )
+; r2 is equal to r1 / 10
 div10:
-; *** TODO: evaluate if a hardcode version similar to above is possible ***
-
-        ; make room on top of fp stack for 10
-        jsr decfpsp             ; make room on top of stack
-        jsr setTOS0             ; initialize it *** TODO: see what original package does, without this we get entry errors ***
-        stz TOSsgn,x            ; also TOSst = 0 for normal TOS <> 0
-
-        ; move 10 to top of fp stack
-        lda f:ieee01m
-        sta TOSm+2,x
-        lda f:ieee01m+2
-        sta TOSm,x
-        lda f:ieee01e
-        sta TOSe,x
-
-        jsr fmult32
-
+        ; push 10 on top of fp stack
+        ldy #10
+        jsr pushu16
+        jsr fdiv32              ; r1 / 10
         rts
+
 
 ; scale10 - multiply TOS by a power of ten
 ;
